@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#04070b" />
+<meta name="description" content="HUMANOIDROID — a private AI assistant that runs 100% on your device. No accounts, no API keys, no cloud." />
+<title>HUMANOIDROID — Offline AI Assistant</title>
+<link rel="manifest" href="manifest.json" />
+<style>
+  :root{
+    --bg:#04070b; --panel:#0a1017; --panel2:#0d141d; --line:#152230;
+    --cyan:#3ae2ff; --cyan-dim:#1899b8; --cyan-faint:#0e3a47;
+    --text:#d8e7f0; --muted:#6f8a9c; --amber:#ffb454; --red:#ff6b6b; --green:#4ade80;
+    --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text); font-family:var(--sans);
+    display:flex; flex-direction:column; min-height:100vh; overflow-x:hidden;
+  }
+  /* faint HUD grid backdrop (SVG pattern, no gradients) */
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M40 .5H0M.5 0v40' fill='none' stroke='rgba(58,226,255,0.06)' stroke-width='1'/%3E%3C/svg%3E");
+  }
+  a{color:var(--cyan)}
+  header{
+    position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:14px;
+    padding:12px 20px; background:rgba(4,7,11,.92); border-bottom:1px solid var(--line);
+    backdrop-filter:blur(8px);
+  }
+  .brand{display:flex; align-items:center; gap:12px; user-select:none}
+  .brand h1{font-family:var(--mono); font-size:19px; letter-spacing:.35em; margin:0; color:var(--cyan); font-weight:700}
+  .brand small{display:block; font-size:10px; letter-spacing:.28em; color:var(--muted); margin-top:3px}
+  .spacer{flex:1}
+  .pill{
+    font-family:var(--mono); font-size:11px; letter-spacing:.12em; padding:6px 12px;
+    border:1px solid var(--line); border-radius:999px; color:var(--muted);
+    display:inline-flex; align-items:center; gap:8px; background:var(--panel);
+  }
+  .pill .dot{width:8px; height:8px; border-radius:50%; background:var(--muted)}
+  .pill.on{color:var(--green); border-color:#1d4a2f} .pill.on .dot{background:var(--green); box-shadow:0 0 8px var(--green)}
+  .pill.off{color:var(--amber); border-color:#4a3a1d} .pill.off .dot{background:var(--amber); box-shadow:0 0 8px var(--amber)}
+  .pill.live{color:var(--cyan); border-color:var(--cyan-faint)} .pill.live .dot{background:var(--cyan); box-shadow:0 0 8px var(--cyan)}
+  select,button,input,textarea{font-family:inherit}
+  select{
+    background:var(--panel); color:var(--text); border:1px solid var(--line);
+    border-radius:8px; padding:8px 10px; font-size:13px; max-width:230px;
+  }
+  .iconbtn{
+    background:var(--panel); color:var(--muted); border:1px solid var(--line); border-radius:8px;
+    width:38px; height:38px; display:inline-flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:17px; transition:.15s;
+  }
+  .iconbtn:hover{color:var(--cyan); border-color:var(--cyan-dim)}
+  .iconbtn.active{color:var(--cyan); border-color:var(--cyan); box-shadow:0 0 10px rgba(58,226,255,.25)}
+  main{position:relative; z-index:1; flex:1; display:flex; flex-direction:column; width:100%; max-width:920px; margin:0 auto; padding:0 16px}
+  /* ---------- setup hero ---------- */
+  #setup{padding:40px 0 60px; text-align:center}
+  .orb{
+    width:150px; height:150px; margin:10px auto 26px; border-radius:50%; position:relative;
+    border:2px solid var(--cyan-dim);
+    box-shadow:0 0 24px rgba(58,226,255,.35), inset 0 0 30px rgba(58,226,255,.18);
+  }
+  .orb::before{content:""; position:absolute; inset:22px; border-radius:50%; border:1px solid var(--cyan-dim); opacity:.7}
+  .orb::after{
+    content:""; position:absolute; inset:52px; border-radius:50%; background:var(--cyan);
+    box-shadow:0 0 30px var(--cyan), 0 0 70px rgba(58,226,255,.6);
+  }
+  .orb.busy{animation:pulse 1.1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 24px rgba(58,226,255,.35), inset 0 0 30px rgba(58,226,255,.18)}
+    50%{box-shadow:0 0 44px rgba(58,226,255,.65), inset 0 0 44px rgba(58,226,255,.35)}}
+  #setup h2{font-family:var(--mono); letter-spacing:.22em; font-size:26px; margin:0 0 10px; color:var(--text)}
+  #setup h2 span{color:var(--cyan)}
+  #setup p.lead{color:var(--muted); max-width:620px; margin:0 auto 8px; line-height:1.65; font-size:15px}
+  .badges{display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:18px 0 26px}
+  .badge{font-family:var(--mono); font-size:11px; letter-spacing:.1em; color:var(--cyan);
+    border:1px solid var(--cyan-faint); background:rgba(58,226,255,.05); padding:6px 12px; border-radius:999px}
+  .modelgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; margin:26px 0; text-align:left}
+  .modelcard{
+    border:1px solid var(--line); background:var(--panel); border-radius:12px; padding:14px;
+    cursor:pointer; transition:.15s; position:relative;
+  }
+  .modelcard:hover{border-color:var(--cyan-dim)}
+  .modelcard.sel{border-color:var(--cyan); box-shadow:0 0 14px rgba(58,226,255,.18)}
+  .modelcard h3{margin:0 0 4px; font-size:14px; font-family:var(--mono); letter-spacing:.06em}
+  .modelcard .meta{font-family:var(--mono); font-size:11px; color:var(--muted); margin-bottom:6px}
+  .modelcard p{margin:0; font-size:12.5px; color:var(--muted); line-height:1.5}
+  .modelcard .rec{position:absolute; top:10px; right:10px; font-family:var(--mono); font-size:10px;
+    color:#04121a; background:var(--cyan); border-radius:4px; padding:2px 7px; letter-spacing:.08em}
+  .bigbtn{
+    font-family:var(--mono); letter-spacing:.18em; font-size:15px; cursor:pointer;
+    background:var(--cyan); color:#031018; border:none; border-radius:10px; padding:15px 44px; font-weight:700;
+    transition:.15s; margin-top:6px;
+  }
+  .bigbtn:hover:not(:disabled){box-shadow:0 0 26px rgba(58,226,255,.5); transform:translateY(-1px)}
+  .bigbtn:disabled{opacity:.45; cursor:not-allowed}
+  .bigbtn.dimmed{opacity:.45; cursor:not-allowed}
+  .ghostbtn{
+    font-family:var(--mono); letter-spacing:.12em; font-size:12px; cursor:pointer;
+    background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:8px; padding:10px 18px;
+  }
+  .ghostbtn:hover{color:var(--cyan); border-color:var(--cyan-dim)}
+  #progress{margin:22px auto 0; max-width:520px; display:none}
+  #progress .bar{height:8px; background:var(--panel2); border:1px solid var(--line); border-radius:99px; overflow:hidden}
+  #progress .fill{height:100%; width:0%; background:var(--cyan); box-shadow:0 0 12px var(--cyan); transition:width .2s}
+  #progress .ptxt{font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:10px; min-height:18px}
+  .reqs{margin:30px auto 0; max-width:640px; text-align:left; border:1px solid var(--line);
+    background:var(--panel); border-radius:12px; padding:18px 20px; font-size:13.5px; color:var(--muted); line-height:1.7}
+  .reqs b{color:var(--text)} .reqs code{font-family:var(--mono); color:var(--cyan); font-size:12.5px}
+  /* ---------- chat ---------- */
+  #chatwrap{display:none; flex:1; flex-direction:column; min-height:0; padding:18px 0 8px}
+  #chatwrap.show{display:flex}
+  #messages{flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:14px; padding:6px 2px 16px; min-height:200px}
+  .msg{max-width:88%; padding:13px 16px; border-radius:14px; line-height:1.65; font-size:14.5px; position:relative; word-wrap:break-word}
+  .msg.user{align-self:flex-end; background:#12303d; border:1px solid #1d4a5c; border-bottom-right-radius:4px}
+  .msg.bot{align-self:flex-start; background:var(--panel); border:1px solid var(--line); border-bottom-left-radius:4px; width:100%; max-width:100%}
+  .msg .role{font-family:var(--mono); font-size:10px; letter-spacing:.25em; color:var(--muted); display:block; margin-bottom:8px}
+  .msg.user .role{color:var(--cyan-dim)}
+  .msg .stats{font-family:var(--mono); font-size:10.5px; color:var(--muted); margin-top:10px; letter-spacing:.06em}
+  .msg .copy{position:absolute; top:8px; right:10px; background:none; border:none; color:var(--muted);
+    cursor:pointer; font-size:14px; opacity:0; transition:.15s}
+  .msg:hover .copy{opacity:1} .msg .copy:hover{color:var(--cyan)}
+  .msg pre{background:#05090d; border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; font-size:13px}
+  .msg code{font-family:var(--mono); font-size:13px}
+  .msg p code{background:#05090d; border:1px solid var(--line); border-radius:5px; padding:1px 6px; color:var(--cyan)}
+  .msg pre code{background:none; border:none; padding:0; color:var(--text)}
+  .msg h1,.msg h2,.msg h3{font-size:15px; color:var(--cyan); margin:14px 0 6px; font-family:var(--mono); letter-spacing:.05em}
+  .msg ul,.msg ol{margin:8px 0; padding-left:22px}
+  .msg li{margin:4px 0}
+  .msg blockquote{border-left:3px solid var(--cyan-dim); margin:10px 0; padding:4px 12px; color:var(--muted)}
+  .cursor{display:inline-block; width:9px; height:16px; background:var(--cyan); vertical-align:-2px; animation:blink .8s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  #chips{display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 12px}
+  .chip{font-size:12.5px; color:var(--muted); border:1px solid var(--line); background:var(--panel);
+    border-radius:999px; padding:7px 14px; cursor:pointer; transition:.15s}
+  .chip:hover{color:var(--cyan); border-color:var(--cyan-dim)}
+  #composer{display:flex; gap:10px; align-items:flex-end; padding:6px 0 16px}
+  #input{
+    flex:1; background:var(--panel); border:1px solid var(--line); border-radius:12px; color:var(--text);
+    padding:13px 16px; font-size:14.5px; resize:none; min-height:52px; max-height:160px; line-height:1.5;
+  }
+  #input:focus{outline:none; border-color:var(--cyan-dim); box-shadow:0 0 0 3px rgba(58,226,255,.08)}
+  #sendbtn{
+    width:52px; height:52px; border-radius:12px; border:none; cursor:pointer; font-size:20px;
+    background:var(--cyan); color:#031018; transition:.15s; flex-shrink:0;
+  }
+  #sendbtn:hover:not(:disabled){box-shadow:0 0 18px rgba(58,226,255,.5)}
+  #sendbtn:disabled{opacity:.4; cursor:default}
+  #stopbtn{display:none; width:52px; height:52px; border-radius:12px; cursor:pointer; font-size:15px;
+    background:transparent; color:var(--red); border:1px solid #5c1d1d; flex-shrink:0}
+  /* ---------- settings drawer ---------- */
+  #drawer{
+    position:fixed; top:0; right:-380px; width:360px; max-width:92vw; height:100%; z-index:50;
+    background:var(--panel); border-left:1px solid var(--line); transition:right .25s ease;
+    padding:22px; overflow-y:auto;
+  }
+  #drawer.open{right:0}
+  #drawer h2{font-family:var(--mono); font-size:14px; letter-spacing:.25em; color:var(--cyan); margin:0 0 18px}
+  #drawer h3{font-family:var(--mono); font-size:11px; letter-spacing:.2em; color:var(--muted); margin:20px 0 8px}
+  #drawer textarea{width:100%; background:var(--panel2); border:1px solid var(--line); border-radius:8px;
+    color:var(--text); padding:10px; font-size:13px; min-height:110px; resize:vertical}
+  #drawer input[type=range]{width:100%}
+  .row{display:flex; align-items:center; justify-content:space-between; gap:10px; margin:10px 0; font-size:13.5px}
+  .switch{position:relative; width:44px; height:24px; flex-shrink:0; cursor:pointer}
+  .switch input{opacity:0; width:0; height:0}
+  .sl{position:absolute; inset:0; background:var(--panel2); border:1px solid var(--line); border-radius:99px; transition:.2s}
+  .sl::before{content:""; position:absolute; width:16px; height:16px; border-radius:50%; background:var(--muted); top:3px; left:4px; transition:.2s}
+  .switch input:checked + .sl{background:var(--cyan-faint); border-color:var(--cyan)}
+  .switch input:checked + .sl::before{transform:translateX(18px); background:var(--cyan)}
+  #scrim{position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:40; display:none}
+  #scrim.show{display:block}
+  .dbutton{width:100%; margin:6px 0; text-align:left}
+  .note{font-size:12px; color:var(--muted); line-height:1.6}
+  #toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); z-index:60;
+    background:var(--panel2); border:1px solid var(--cyan-dim); color:var(--text); font-size:13px;
+    padding:11px 20px; border-radius:10px; opacity:0; pointer-events:none; transition:.25s; max-width:90vw;
+  }
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  #nossl{display:none; text-align:center; padding:60px 20px}
+  #nossl .card{max-width:560px; margin:0 auto; border:1px solid #5c1d1d; background:var(--panel);
+    border-radius:14px; padding:34px}
+  @media(max-width:640px){
+    .brand h1{font-size:15px; letter-spacing:.22em}
+    #setup h2{font-size:20px}
+    select{max-width:150px}
+    .msg{max-width:94%}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="orb" id="mini-orb" style="width:38px;height:38px;margin:0;border-width:1px">
+      <style>#mini-orb::before{inset:6px}#mini-orb::after{inset:13px}</style>
+    </div>
+    <div>
+      <h1>HUMANOIDROID</h1>
+      <small>OFFLINE AI ASSISTANT</small>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <span class="pill" id="netpill"><span class="dot"></span><span id="nettxt">CHECKING</span></span>
+  <span class="pill" id="modelpill" style="display:none"><span class="dot"></span><span id="modeltxt"></span></span>
+  <button class="iconbtn" id="voicebtn" title="Voice replies on/off" aria-label="Toggle voice">🔈</button>
+  <button class="iconbtn" id="settingsbtn" title="Settings" aria-label="Settings">⚙</button>
+</header>
+
+<main>
+  <!-- unsupported browser -->
+  <div id="nossl">
+    <div class="card">
+      <div style="font-size:44px;margin-bottom:14px">🚫</div>
+      <h2 style="font-family:var(--mono);letter-spacing:.15em">WEBGPU NOT AVAILABLE</h2>
+      <p style="color:var(--muted);line-height:1.7">HUMANOIDROID runs its AI brain on your device's GPU through WebGPU.
+      This browser doesn't expose it.<br><br>
+      Please open this file in <b style="color:var(--text)">Chrome 113+</b> or <b style="color:var(--text)">Edge 113+</b>
+      on a computer (Windows, macOS, Linux, or Chromebook). iPhones and iPads can't run it — Apple blocks WebGPU in mobile browsers.</p>
+    </div>
+  </div>
+
+  <!-- setup hero -->
+  <section id="setup" hidden>
+    <div class="orb" id="hero-orb"></div>
+    <h2>AT YOUR <span>SERVICE</span></h2>
+    <p class="lead">HUMANOIDROID is a real AI assistant that lives <b style="color:var(--text)">entirely on your device</b>.
+    Choose how to power it — no internet needed either way, after a one-time download.</p>
+    <div class="badges">
+      <span class="badge">✓ 100% PRIVATE — NOTHING LEAVES YOUR DEVICE</span>
+      <span class="badge">✓ NO ACCOUNTS · NO API KEYS · NO SUBSCRIPTION</span>
+      <span class="badge">✓ WORKS OFFLINE AFTER FIRST DOWNLOAD</span>
+    </div>
+
+    <div class="modelgrid" id="backendgrid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
+      <div class="modelcard backend" id="be-browser">
+        <h3>🌐 BROWSER BRAIN</h3>
+        <div class="meta">NO INSTALL · NEEDS A GOOD GPU</div>
+        <p>Runs inside this page on your GPU via WebGPU. Nothing to install — but picky about hardware.</p>
+      </div>
+      <div class="modelcard backend" id="be-ollama">
+        <h3>🖥️ OLLAMA</h3>
+        <div class="meta">INSTALL ONCE · BIGGER BRAINS</div>
+        <p>Connects to Ollama on your computer. Bigger, smarter models — works even without a strong GPU.</p>
+      </div>
+    </div>
+
+    <div id="browsersetup">
+      <div class="modelgrid" id="modelgrid"></div>
+      <button class="bigbtn" id="initbtn">INITIALIZE HUMANOIDROID</button>
+      <div id="progress">
+        <div class="bar"><div class="fill" id="pfill"></div></div>
+        <div class="ptxt" id="ptxt">Preparing…</div>
+      </div>
+    </div>
+
+    <div id="ollamasetup" hidden>
+      <div class="reqs" id="ollamastatus" style="margin-top:0">Checking…</div>
+      <div class="modelgrid" id="ollamamodels"></div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:6px">
+        <button class="bigbtn" id="ollamabtn" disabled style="margin-top:0">CONNECT HUMANOIDROID</button>
+        <button class="ghostbtn" id="ollamarefresh" style="align-self:center">↻ Refresh</button>
+      </div>
+      <div class="reqs">
+        <b>First-time setup (2 minutes, once):</b><br>
+        1. Install <b>Ollama</b> from <code>ollama.com</code> and launch it.<br>
+        2. Pull a brain in a terminal: <code>ollama pull qwen3:8b</code>
+           &nbsp;·&nbsp; smaller/faster: <code>qwen3:1.7b</code> &nbsp;·&nbsp; stronger GPU: <code>qwen3:32b</code><br>
+        3. Press <b>Refresh</b> — your downloaded brains appear above.<br>
+        <span class="note">After the download, everything runs offline on your machine. If this page can't reach Ollama, open it through <code>http://localhost:8000</code> (any static server) instead of double-clicking the file.</span>
+      </div>
+    </div>
+    <div class="reqs">
+      <b>How it works:</b> the first time you initialize, your chosen model (a few hundred MB to a few GB)
+      downloads from a public CDN and is cached in your browser. Every visit after that loads instantly and runs
+      <b>fully offline</b> — try airplane mode. Bigger brains know more but need a stronger GPU;
+      start with the recommended one. <span class="note">Engine: <code>@mlc-ai/web-llm</code> over WebGPU.</span>
+    </div>
+  </section>
+
+  <!-- chat -->
+  <section id="chatwrap">
+    <div id="messages"></div>
+    <div id="chips"></div>
+    <div id="composer">
+      <textarea id="input" placeholder="Ask HUMANOIDROID anything…  (Enter to send, Shift+Enter for new line)" rows="1"></textarea>
+      <button id="stopbtn" title="Stop generating">■</button>
+      <button id="sendbtn" title="Send">➤</button>
+    </div>
+  </section>
+</main>
+
+<!-- settings drawer -->
+<div id="scrim"></div>
+<aside id="drawer" aria-label="Settings">
+  <h2>SYSTEMS</h2>
+
+  <h3>PERSONALITY / SYSTEM PROMPT</h3>
+  <textarea id="sysprompt" spellcheck="false"></textarea>
+
+  <h3>CREATIVITY (TEMPERATURE)</h3>
+  <div class="row"><input type="range" id="temp" min="0" max="1.5" step="0.1" value="0.7"><span id="tempval" style="font-family:var(--mono);color:var(--cyan)">0.7</span></div>
+
+  <h3>VOICE</h3>
+  <div class="row"><span>HUMANOIDROID speaks replies aloud</span>
+    <label class="switch"><input type="checkbox" id="voicesw"><span class="sl"></span></label>
+  </div>
+
+  <h3>MODEL</h3>
+  <div class="row"><span id="loadedmodel" class="note">No model loaded</span></div>
+  <button class="ghostbtn dbutton" id="unloadbtn">⏏ Unload brain (free GPU memory)</button>
+  <button class="ghostbtn dbutton" id="switchbtn">🔄 Switch brain…</button>
+
+  <h3>CONVERSATION</h3>
+  <button class="ghostbtn dbutton" id="exportbtn">⤓ Export chat (JSON)</button>
+  <button class="ghostbtn dbutton" id="clearbtn">🗑 Clear conversation</button>
+
+  <h3>OFFLINE STATUS</h3>
+  <p class="note" id="offlinenote">Checking…</p>
+  <p class="note">Tip: after the first download, bookmark this file or install it as an app
+  (browser menu → Install / Add to Home screen). Then it opens instantly, online or off.</p>
+</aside>
+
+<div id="toast"></div>
+
+<script type="module">
+/* ============================== webllm loader ==============================
+   The engine is loaded dynamically (CDN fallback built in), and the brain list
+   is read from the engine's own registry at runtime — so model IDs can never
+   go stale between releases. */
+const WEBLLM_VERSION = "0.2.83";
+const CDNS = [
+  `https://esm.run/@mlc-ai/web-llm@${WEBLLM_VERSION}`,
+  `https://esm.sh/@mlc-ai/web-llm@${WEBLLM_VERSION}`,
+];
+let CreateMLCEngine = null, prebuiltAppConfig = null, libError = null;
+async function loadWebLLM(){
+  if(CreateMLCEngine) return true;
+  for(const url of CDNS){
+    try{
+      const mod = await import(url);
+      CreateMLCEngine = mod.CreateMLCEngine;
+      prebuiltAppConfig = mod.prebuiltAppConfig;
+      if(CreateMLCEngine && prebuiltAppConfig) return true;
+    }catch(e){ libError = e; }
+  }
+  return false;
+}
+
+/* ============================== config ============================== */
+/* Curated shortlist, matched against the engine's real registry at boot.
+   Sizes/VRAM from WebLLM's own prebuiltAppConfig figures (2026). */
+const CURATED = [
+  { match:"SmolLM2-360M",   name:"SmolLM2 360M", size:"~0.27 GB", vram:"1 GB+",  desc:"Tiny and instant. Weak quality — for testing only." },
+  { match:"Llama-3.2-1B",   name:"Llama 3.2 1B", size:"~0.6 GB",  vram:"2 GB+",  desc:"Runs on almost anything with WebGPU. The safe fallback." },
+  { match:"Qwen3-0.6B",     name:"Qwen3 0.6B",   size:"~0.5 GB",  vram:"2 GB+",  desc:"Fastest Qwen. Good for quick Q&A." },
+  { match:"Qwen3-1.7B",     name:"Qwen3 1.7B",   size:"~1.2 GB",  vram:"4 GB+",  desc:"Best quality-per-megabyte in the browser. The sweet spot.", rec:true },
+  { match:"gemma-2-2b",     name:"Gemma 2 2B",   size:"~1.4 GB",  vram:"4 GB+",  desc:"Google's compact model, strong general knowledge." },
+  { match:"Llama-3.2-3B",   name:"Llama 3.2 3B", size:"~1.8 GB",  vram:"6 GB+",  desc:"Solid general 3B. Wants a real GPU." },
+  { match:"Qwen2.5-3B",     name:"Qwen2.5 3B",   size:"~1.9 GB",  vram:"6 GB+",  desc:"Reliable structured and JSON answers." },
+  { match:"Phi-3.5-mini",   name:"Phi 3.5 Mini", size:"~2.2 GB",  vram:"8 GB+",  desc:"Microsoft's reasoning-focused small model." },
+  { match:"Qwen3-4B",       name:"Qwen3 4B",     size:"~2.3 GB",  vram:"8 GB+",  desc:"Quality pick for stronger machines." },
+  { match:"Llama-3.1-8B",   name:"Llama 3.1 8B", size:"~4.9 GB",  vram:"12 GB+", desc:"Maximum in-browser knowledge. Needs ~5 GB free VRAM — skip on laptops.", heavy:true },
+];
+let MODELS = [];
+function resolveModels(){
+  const list = (prebuiltAppConfig && prebuiltAppConfig.model_list) || [];
+  MODELS = [];
+  CURATED.forEach(c=>{
+    const hit = list.find(m => (m.model_id || "").includes(c.match));
+    if(hit) MODELS.push({ id: hit.model_id, ...c });
+  });
+  if(!MODELS.length){ // last resort: offer whatever the runtime ships
+    MODELS = list.slice(0, 8).map(m => ({ id: m.model_id, name: m.model_id, size:"?", vram:"?", desc:"" }));
+  }
+}
+const DEFAULT_SYS = `You are Humanoidroid, a highly capable AI assistant running entirely offline on the user's own device. Personality: composed, precise, dryly witty, unfailingly helpful. Keep answers clear and well-structured; use short sections or bullets for complex topics. If you don't know something, say so plainly rather than inventing it. Never mention that you are a language model unless asked — simply be Humanoidroid.`;
+const SAMPLES = [
+  "Explain black holes like I'm 12",
+  "Write a Python function that checks if a word is a palindrome",
+  "Give me a 5-step morning routine for deep focus",
+  "Debug this JavaScript: for(let i=0;i<10;i++) setTimeout(()=>console.log(i),100)",
+  "Write a haiku about a robot learning to dream",
+  "Plan a weekend trip to Banff on a budget",
+];
+
+/* ============================== state ============================== */
+const $ = s => document.querySelector(s);
+let engine = null, selectedModel = null, generating = false, stopFlag = false;
+let backend = load("humanoidroid.backend", "browser");   // "browser" | "ollama"
+let ollamaModel = load("humanoidroid.omodel", null), ollamaList = [], aborter = null;
+let history = [];            // {role, content} sent to model (excludes system)
+let settings = load("humanoidroid.settings", { sys:DEFAULT_SYS, temp:0.7, voice:false });
+
+function load(k, fb){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; }catch{ return fb; } }
+function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2600); }
+
+/* ============================== markdown-lite ============================== */
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function md(src){
+  const blocks = [];
+  let html = esc(src);
+  // code blocks -> placeholders
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (m,lang,code)=>{
+    blocks.push(`<pre><code>${code.replace(/\n$/,"")}</code></pre>`);
+    return `\u0000${blocks.length-1}\u0000`;
+  });
+  // inline code
+  html = html.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  // headers
+  html = html.replace(/^### (.*)$/gm, "<h3>$1</h3>").replace(/^## (.*)$/gm, "<h2>$1</h2>").replace(/^# (.*)$/gm, "<h1>$1</h1>");
+  // bold / italic
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<i>$2</i>");
+  // blockquote
+  html = html.replace(/^&gt; (.*)$/gm, "<blockquote>$1</blockquote>");
+  // lists
+  html = html.replace(/^\s*[-*] (.*)$/gm, "•$1");
+  html = html.replace(/^\s*\d+\. (.*)$/gm, "◦$1");
+  // paragraphs & line breaks
+  html = html.split(/\n{2,}/).map(p=>{
+    if(/^\u0000\d+\u0000$/.test(p.trim()) || /^<h\d|^<blockquote/.test(p.trim())) return p;
+    if(/^[•◦]/.test(p.trim())){
+      const tag = p.trim().startsWith("•") ? "ul" : "ol";
+      const items = p.trim().split("\n").map(l=>`<li>${l.trim().slice(1).trim()}</li>`).join("");
+      return `<${tag}>${items}</${tag}>`;
+    }
+    return `<p>${p.replace(/\n/g,"<br>")}</p>`;
+  }).join("");
+  html = html.replace(/\u0000(\d+)\u0000/g, (m,i)=>blocks[+i]);
+  return html;
+}
+function stripMd(s){
+  return s.replace(/```[\s\S]*?```/g," [code block] ").replace(/[#>*`_]/g,"").replace(/\[(.*?)\]\(.*?\)/g,"$1");
+}
+
+/* ============================== ui helpers ============================== */
+function addMsg(role, content){
+  const wrap = $("#messages");
+  const div = document.createElement("div");
+  div.className = "msg " + (role==="user" ? "user" : "bot");
+  div.innerHTML = `<span class="role">${role==="user"?"YOU":"HUMANOIDROID"}</span>
+    <div class="body"></div>
+    <button class="copy" title="Copy">⧉</button>
+    ${role==="bot"?'<div class="stats"></div>':""}`;
+  div.querySelector(".body").innerHTML = md(content);
+  div.querySelector(".copy").onclick = e=>{
+    navigator.clipboard.writeText(content).then(()=>toast("Copied to clipboard"));
+    e.stopPropagation();
+  };
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+  return div;
+}
+function setNet(){
+  const online = navigator.onLine, pill = $("#netpill"), txt = $("#nettxt");
+  pill.className = "pill " + (online ? "on" : "off");
+  txt.textContent = online ? "ONLINE" : "OFFLINE";
+  $("#offlinenote").innerHTML = online
+    ? "You're online. After a model's first download, HUMANOIDROID keeps working with the network <b>completely off</b> — try airplane mode."
+    : "You're offline right now — and if a brain is loaded, HUMANOIDROID still works. That's the whole point.";
+}
+window.addEventListener("online", setNet); window.addEventListener("offline", setNet);
+
+/* ============================== backends ============================== */
+function setBackend(b){
+  backend = b; save("humanoidroid.backend", b);
+  $("#be-browser").classList.toggle("sel", b === "browser");
+  $("#be-ollama").classList.toggle("sel", b === "ollama");
+  $("#browsersetup").hidden = b !== "browser";
+  $("#ollamasetup").hidden = b !== "ollama";
+  if(b === "ollama") checkOllama();
+}
+
+async function checkOllama(){
+  const st = $("#ollamastatus"), grid = $("#ollamamodels"), btn = $("#ollamabtn");
+  grid.innerHTML = ""; btn.disabled = true;
+  if(location.protocol === "file:"){
+    st.innerHTML = "You're opening this file directly <b>as a file</b> — browsers block file pages from reaching Ollama, so Refresh can't see it.<br><br>" +
+      "<b>Easiest fix (no installs):</b><br>" +
+      "1. Open a terminal and run: <code>setx OLLAMA_ORIGINS \"*\"</code><br>" +
+      "2. Fully quit Ollama (tray icon → <b>Quit</b>), then launch it again<br>" +
+      "3. Press <b>Refresh</b> — your brains appear above.<br><br>" +
+      "<span class=\"note\">Mac/Linux: <code>launchctl setenv OLLAMA_ORIGINS \"*\"</code>, then restart Ollama. " +
+      "Alternative for anyone: serve this folder at <code>http://localhost:8000</code> instead of double-clicking the file.</span>";
+    return;
+  }
+  st.innerHTML = "Looking for Ollama on this computer…";
+  try{
+    const r = await fetch("http://localhost:11434/api/tags");
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    ollamaList = (j.models || []).map(m => m.name);
+    if(!ollamaList.length){
+      st.innerHTML = "Ollama is running, but no brains downloaded yet.<br>Run <code>ollama pull qwen3:8b</code> in a terminal, then press <b>Refresh</b>.";
+      return;
+    }
+    if(!ollamaModel || !ollamaList.includes(ollamaModel)) ollamaModel = ollamaList[0];
+    st.innerHTML = "Ollama found on this computer. Pick a brain:";
+    renderOllamaModels();
+  }catch(e){
+    console.error(e);
+    st.innerHTML = "Couldn't reach Ollama at <code>localhost:11434</code>.<br>" +
+      "1) Install it from <b>ollama.com</b> and launch it.<br>" +
+      "2) If you double-clicked this file, open it via <code>http://localhost:8000</code> instead — browsers block file pages from reaching localhost.";
+  }
+}
+function renderOllamaModels(){
+  const grid = $("#ollamamodels"), btn = $("#ollamabtn");
+  grid.innerHTML = "";
+  ollamaList.forEach(name=>{
+    const c = document.createElement("div");
+    c.className = "modelcard" + (ollamaModel === name ? " sel" : "");
+    c.innerHTML = `<h3>${esc(name)}</h3><div class="meta">LOCAL · OFFLINE</div><p>Installed via Ollama on this computer.</p>`;
+    c.onclick = ()=>{ ollamaModel = name; save("humanoidroid.omodel", name); renderOllamaModels(); };
+    grid.appendChild(c);
+  });
+  btn.disabled = !ollamaModel;
+}
+
+/* ============================== engine (browser) ============================== */
+function renderModelGrid(){
+  const g = $("#modelgrid"); g.innerHTML = "";
+  if(!MODELS.length){
+    g.innerHTML = '<p class="note" style="grid-column:1/-1;text-align:center;padding:20px">No brains listed — the engine list failed to load. Press INITIALIZE anyway to retry.</p>';
+    return;
+  }
+  MODELS.forEach(m=>{
+    const c = document.createElement("div");
+    c.className = "modelcard" + (selectedModel && selectedModel.id===m.id ? " sel" : "");
+    c.innerHTML = `${m.rec?'<span class="rec">RECOMMENDED</span>':""}${m.heavy?'<span class="rec" style="background:var(--amber)">HEAVY GPU</span>':""}<h3>${m.name}</h3>
+      <div class="meta">⬇ ${m.size} &nbsp;·&nbsp; GPU ${m.vram}</div><p>${m.desc}</p>`;
+    c.onclick = ()=>{ selectedModel = m; renderModelGrid(); };
+    g.appendChild(c);
+  });
+}
+
+async function initEngine(){
+  const btn = $("#initbtn"), orb = $("#hero-orb");
+  btn.disabled = true; orb.classList.add("busy");
+  $("#progress").style.display = "block";
+  const fill = $("#pfill"), ptxt = $("#ptxt");
+  ptxt.style.color = "";
+  try{
+    ptxt.textContent = "Loading AI engine…";
+    const ok = await loadWebLLM();
+    if(!ok){
+      const why = (libError && libError.message) || "network error";
+      throw new Error("the AI engine itself wouldn't load (" + why + "). Check your connection and retry — both CDN mirrors failed.");
+    }
+    if(engine){ try{ await engine.unload(); }catch{} engine = null; }
+    let lastPct = -1;
+    engine = await CreateMLCEngine(selectedModel.id, {
+      initProgressCallback: p=>{
+        const pct = Math.round((p.progress || 0) * 100);
+        if(pct !== lastPct){ fill.style.width = pct + "%"; lastPct = pct; }
+        ptxt.textContent = p.text || "Loading…";
+      }
+    });
+    save("humanoidroid.model", selectedModel.id);
+    enterChat();
+    toast(`HUMANOIDROID online — ${selectedModel.name} loaded`);
+  }catch(err){
+    console.error(err);
+    const msg = ((err && err.message) || String(err)).slice(0, 260);
+    const gpuFail = /compatible gpu|adapter|vram|out of memory|webgpu|device/i.test(msg);
+    if(gpuFail && MODELS.length){
+      // Too big for this GPU — offer the recommended smaller brain in one click
+      const smaller = MODELS.find(m => m.rec) || MODELS[0];
+      if(smaller.id !== selectedModel.id){
+        ptxt.innerHTML = "Your GPU couldn't handle <b>" + esc(selectedModel.name) + "</b> — it's the biggest brain here and needs about 5&nbsp;GB of free GPU memory, which this machine doesn't have.<br><br>" +
+          "No worries — the smaller brains run great on modest hardware:<br><br>" +
+          '<button class="bigbtn" id="trysmaller" style="padding:13px 30px;font-size:13px">LOAD ' + esc(smaller.name.toUpperCase()) + ' INSTEAD</button>';
+        ptxt.style.color = "var(--amber)";
+        btn.disabled = false; btn.textContent = "INITIALIZE HUMANOIDROID";
+        orb.classList.remove("busy");
+        $("#trysmaller").onclick = ()=>{
+          selectedModel = smaller; renderModelGrid();
+          $("#progress").style.display = "none";
+          initEngine();
+        };
+        return;
+      }
+    }
+    ptxt.innerHTML = "Couldn't start <b>" + esc(selectedModel ? selectedModel.name : "brain") + "</b>: " +
+      esc(msg) + "<br><br>Try a smaller brain (Llama 3.2 1B), or press F12 → Console for the full error.";
+    ptxt.style.color = "var(--red)";
+    btn.disabled = false; btn.textContent = "RETRY INITIALIZE";
+    orb.classList.remove("busy");
+  }
+}
+
+function enterChat(){
+  $("#setup").hidden = true;
+  const cw = $("#chatwrap"); cw.classList.add("show");
+  const orb = $("#hero-orb"); if(orb) orb.classList.remove("busy");
+  const brainName = backend === "ollama" ? ollamaModel : (selectedModel && selectedModel.name);
+  $("#modelpill").style.display = "inline-flex";
+  $("#modeltxt").textContent = (brainName || "HUMANOIDROID").toUpperCase();
+  $("#loadedmodel").textContent = backend === "ollama"
+    ? `${ollamaModel} · via local Ollama · runs offline`
+    : `${selectedModel.name} · ${selectedModel.size} · cached for offline use`;
+  renderChips();
+  if(!history.length){
+    addMsg("bot", `Systems online, and — for the record — **running entirely on this machine**. No cloud, no account, nothing you say leaves this device.\n\nHow may I assist you?`);
+  }
+  $("#input").focus();
+}
+
+function renderChips(){
+  const c = $("#chips"); c.innerHTML = "";
+  SAMPLES.forEach(s=>{
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = s;
+    b.onclick = ()=>{ $("#input").value = s; send(); $("#chips").style.display="none"; };
+    c.appendChild(b);
+  });
+}
+
+/* ---- Ollama backend: streams from localhost:11434, fully offline ---- */
+async function sendOllama(){
+  const ta = $("#input"), text = ta.value.trim();
+  if(!text || generating || !ollamaModel) return;
+  $("#chips").style.display = "none";
+  ta.value = ""; ta.style.height = "auto";
+  addMsg("user", text);
+  history.push({ role:"user", content:text });
+  if(history.length > 40) history = history.slice(-40);
+
+  generating = true;
+  $("#sendbtn").disabled = true; $("#stopbtn").style.display = "inline-block";
+  const div = addMsg("bot", "");
+  const body = div.querySelector(".body"), stats = div.querySelector(".stats");
+  body.innerHTML = '<span class="cursor"></span>';
+
+  const t0 = performance.now();
+  let out = "";
+  aborter = new AbortController();
+  try{
+    const res = await fetch("http://localhost:11434/api/chat", {
+      method: "POST",
+      signal: aborter.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: ollamaModel,
+        stream: true,
+        options: { temperature: settings.temp },
+        messages: [{ role:"system", content: settings.sys }, ...history],
+      }),
+    });
+    if(!res.ok) throw new Error("Ollama replied HTTP " + res.status);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for(;;){
+      const { done, value } = await reader.read();
+      if(done) break;
+      buf += dec.decode(value, { stream:true });
+      const lines = buf.split("\n"); buf = lines.pop();
+      for(const line of lines){
+        const s = line.trim(); if(!s) continue;
+        try{
+          const j = JSON.parse(s);
+          out += (j.message && j.message.content) || "";
+          body.innerHTML = md(out) + '<span class="cursor"></span>';
+          const m = $("#messages"); m.scrollTop = m.scrollHeight;
+        }catch{}
+      }
+    }
+  }catch(err){
+    console.error(err);
+    if(err && err.name === "AbortError"){ out += "\n\n*— stopped.*"; }
+    else out = out || "Couldn't reach Ollama. Is it running? (Try `ollama serve` in a terminal, then resend.)";
+  }
+  const secs = ((performance.now() - t0) / 1000).toFixed(1);
+  body.innerHTML = md(out);
+  stats.textContent = `◷ ${secs}s · ${ollamaModel} · via Ollama · 100% local`;
+  history.push({ role:"assistant", content:out });
+  save("humanoidroid.history", history.slice(-40));
+  generating = false;
+  $("#sendbtn").disabled = false; $("#stopbtn").style.display = "none";
+  speak(stripMd(out).slice(0, 600));
+}
+
+/* ============================== chat ============================== */
+async function send(){
+  if(backend === "ollama") return sendOllama();
+  const ta = $("#input"), text = ta.value.trim();
+  if(!text || generating || !engine) return;
+  $("#chips").style.display = "none";
+  ta.value = ""; ta.style.height = "auto";
+  addMsg("user", text);
+  history.push({ role:"user", content:text });
+  if(history.length > 40) history = history.slice(-40);
+
+  generating = true; stopFlag = false;
+  $("#sendbtn").disabled = true; $("#stopbtn").style.display = "inline-block";
+  const orb = $("#hero-orb"); orb.classList.add("busy");
+  const div = addMsg("bot", "");
+  const body = div.querySelector(".body"), stats = div.querySelector(".stats");
+  body.innerHTML = '<span class="cursor"></span>';
+
+  const messages = [{ role:"system", content:settings.sys }, ...history];
+  const t0 = performance.now();
+  let out = "";
+  try{
+    const chunks = await engine.chat.completions.create({
+      messages, temperature:settings.temp, stream:true, max_tokens:2048,
+    });
+    for await(const chunk of chunks){
+      if(stopFlag){ try{ await engine.interruptGenerate(); }catch{} break; }
+      const d = chunk.choices?.[0]?.delta?.content || "";
+      out += d;
+      body.innerHTML = md(out) + '<span class="cursor"></span>';
+      const m = $("#messages"); m.scrollTop = m.scrollHeight;
+    }
+  }catch(err){
+    console.error(err);
+    out = out || "My apologies — something interrupted my thought process. Could you try that again?";
+  }
+  const secs = ((performance.now()-t0)/1000).toFixed(1);
+  const toks = Math.max(1, Math.round(out.length/4));
+  body.innerHTML = md(out);
+  stats.textContent = `◷ ${secs}s · ≈${toks} tokens · ${(toks/Math.max(.1,secs)).toFixed(1)} tok/s · ${selectedModel.name} · 100% local`;
+  history.push({ role:"assistant", content:out });
+  save("humanoidroid.history", history.slice(-40));
+  generating = false;
+  $("#sendbtn").disabled = false; $("#stopbtn").style.display = "none";
+  orb.classList.remove("busy");
+  speak(stripMd(out).slice(0, 600));
+}
+
+/* ============================== voice ============================== */
+let voiceOn = settings.voice;
+function pickVoice(){
+  const vs = speechSynthesis.getVoices();
+  return vs.find(v=>/en/i.test(v.lang) && /male|daniel|david|george|arthur/i.test(v.name))
+      || vs.find(v=>/en[-_]GB/i.test(v.lang))
+      || vs.find(v=>/^en/i.test(v.lang)) || vs[0];
+}
+function speak(text){
+  if(!voiceOn || !("speechSynthesis" in window) || !text.trim()) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  const v = pickVoice(); if(v) u.voice = v;
+  u.rate = 1.02; u.pitch = 0.85;
+  speechSynthesis.speak(u);
+}
+function setVoice(on){
+  voiceOn = on; settings.voice = on; save("humanoidroid.settings", settings);
+  $("#voicesw").checked = on;
+  $("#voicebtn").classList.toggle("active", on);
+  $("#voicebtn").textContent = on ? "🔊" : "🔈";
+  if(!on && "speechSynthesis" in window) speechSynthesis.cancel();
+}
+
+/* ============================== wiring ============================== */
+$("#initbtn").onclick = initEngine;
+$("#sendbtn").onclick = send;
+$("#stopbtn").onclick = ()=>{ stopFlag = true; if(aborter) aborter.abort(); };
+$("#input").addEventListener("keydown", e=>{
+  if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); }
+});
+$("#input").addEventListener("input", e=>{
+  e.target.style.height = "auto";
+  e.target.style.height = Math.min(160, e.target.scrollHeight) + "px";
+});
+$("#voicebtn").onclick = ()=> setVoice(!voiceOn);
+
+// drawer
+const drawer = $("#drawer"), scrim = $("#scrim");
+const openDrawer = ()=>{ drawer.classList.add("open"); scrim.classList.add("show"); };
+const closeDrawer = ()=>{ drawer.classList.remove("open"); scrim.classList.remove("show"); };
+$("#settingsbtn").onclick = openDrawer;
+scrim.onclick = closeDrawer;
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") closeDrawer(); });
+
+$("#sysprompt").value = settings.sys;
+$("#sysprompt").addEventListener("change", e=>{ settings.sys = e.target.value; save("humanoidroid.settings", settings); toast("Personality updated"); });
+$("#temp").value = settings.temp;
+$("#tempval").textContent = settings.temp;
+$("#temp").addEventListener("input", e=>{
+  settings.temp = parseFloat(e.target.value);
+  $("#tempval").textContent = settings.temp.toFixed(1);
+  save("humanoidroid.settings", settings);
+});
+$("#voicesw").checked = voiceOn;
+$("#voicesw").addEventListener("change", e=> setVoice(e.target.checked));
+$("#exportbtn").onclick = ()=>{
+  const blob = new Blob([JSON.stringify({model:selectedModel?.id, exported:new Date().toISOString(), history}, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "humanoidroid-chat.json"; a.click();
+  URL.revokeObjectURL(a.href); closeDrawer();
+};
+$("#clearbtn").onclick = ()=>{ history = []; save("humanoidroid.history", []); $("#messages").innerHTML=""; renderChips(); $("#chips").style.display="flex"; closeDrawer(); toast("Conversation cleared"); };
+$("#unloadbtn").onclick = async ()=>{
+  if(aborter){ aborter.abort(); aborter = null; }
+  if(engine){ try{ await engine.unload(); }catch{} engine = null; }
+  $("#chatwrap").classList.remove("show"); $("#setup").hidden = false;
+  $("#modelpill").style.display = "none"; $("#progress").style.display = "none";
+  $("#initbtn").disabled = false; renderModelGrid(); closeDrawer(); toast("Brain unloaded — GPU memory freed");
+};
+$("#switchbtn").onclick = ()=>{ $("#unloadbtn").click(); };
+
+/* ============================== boot ============================== */
+(async function boot(){
+  if(!("gpu" in navigator)){
+    $("#nossl").style.display = "block";
+    return;
+  }
+  setNet();
+  setVoice(voiceOn);
+  history = load("humanoidroid.history", []);
+  $("#be-browser").onclick = ()=>setBackend("browser");
+  $("#be-ollama").onclick = ()=>setBackend("ollama");
+  $("#ollamarefresh").onclick = ()=>checkOllama();
+  $("#ollamabtn").onclick = ()=>{ if(ollamaModel) enterChat(); };
+  setBackend(backend === "ollama" ? "ollama" : "browser");
+  const ok = await loadWebLLM();
+  if(ok){
+    resolveModels();
+    selectedModel = MODELS.find(m => m.rec) || MODELS[0];
+    const savedModel = load("humanoidroid.model", null);
+    if(savedModel){
+      const m = MODELS.find(x => x.id === savedModel);
+      if(m) selectedModel = m;
+    }
+  }else{
+    $("#progress").style.display = "block";
+    const ptxt = $("#ptxt");
+    ptxt.textContent = "The AI engine couldn't be fetched (both CDN mirrors failed). Check your connection — the INITIALIZE button will retry.";
+    ptxt.style.color = "var(--amber)";
+  }
+  renderModelGrid();
+  $("#setup").hidden = false;
+  if("serviceWorker" in navigator && /^https?:/.test(location.protocol)){
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  }
+})();
+</script>
+</body>
+</html>
